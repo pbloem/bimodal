@@ -18,9 +18,11 @@ from collections import defaultdict, Counter, OrderedDict
 
 import util, models
 
+from util import PAD, SOS, EOS, UNK, EXTRA_SYMBOLS
+
 from tensorboardX import SummaryWriter
 
-EXTRA_SYMBOLS = ['.pad', '.sos', '.eos', '.unk']
+REP = 3
 
 def go(arg):
 
@@ -67,15 +69,25 @@ def go(arg):
     print('vocabulary size', vocab_size)
     print('top 100 words:', i2w[:100])
 
+    def decode(indices):
+
+        sentence = ''
+        for id in indices:
+                if id == PAD:
+                    break
+                sentence += i2w[id] + ' '
+
+        return sentence
+
     ## Set up the models
 
-    img_enc = models.ImEncoder(in_size=(arg.img_size, arg.img_size))
-    img_dec = models.ImDecoder(in_size=(arg.img_size, arg.img_size))
+    img_enc = models.ImEncoder(in_size=(arg.img_size, arg.img_size), zsize=arg.latent_size)
+    img_dec = models.ImDecoder(in_size=(arg.img_size, arg.img_size), zsize=arg.latent_size)
 
     embedding = torch.nn.Embedding(num_embeddings=vocab_size, embedding_dim=arg.embedding_size)
 
-    seq_enc = models.SeqEncoder(vocab_size=vocab_size, embedding=embedding)
-    seq_dec = models.SeqDecoder(vocab_size=vocab_size, embedding=embedding)
+    seq_enc = models.SeqEncoder(vocab_size=vocab_size, embedding=embedding, zsize=arg.latent_size)
+    seq_dec = models.SeqDecoder(vocab_size=vocab_size, embedding=embedding, zsize=arg.latent_size)
 
     if torch.cuda.is_available():
         img_enc.cuda()
@@ -93,6 +105,8 @@ def go(arg):
     for e in range(arg.epochs):
         print('epoch', e)
         for fr in tqdm.trange(0, len(coco_data), arg.batch_size):
+            if fr > 60:
+                break
 
             to = min(len(coco_data), fr + arg.batch_size)
 
@@ -165,6 +179,27 @@ def go(arg):
             tbw.add_scalar('score/cap/rec', float(rec_cap.mean()), instances_seen)
             tbw.add_scalar('score/loss', float(loss), instances_seen)
 
+        # Interpolate
+        zpairs = []
+        for r in range(REP):
+
+            print('Interpolation, repeat', r)
+
+            z1, z2 = torch.randn(2, arg.latent_size)
+            zpairs.append((z1, z2))
+
+            zs = util.slerp(z1, z2, 10)
+
+            print('== sentences ==')
+            sentences, _ = seq_dec.sample(z=zs)
+
+            for s in sentences:
+                print('   ', decode(s))
+
+        print('== images ==')
+
+        util.interpolate(zpairs, img_dec, name='interpolate.{}'.format(e))
+
 if __name__ == "__main__":
 
     ## Parse the command line options
@@ -178,6 +213,11 @@ if __name__ == "__main__":
     parser.add_argument("-b", "--batch-size",
                         dest="batch_size",
                         help="Size of the batches.",
+                        default=32, type=int)
+
+    parser.add_argument("-L", "--latent-size",
+                        dest="latent_size",
+                        help="Size of the latent representations.",
                         default=32, type=int)
 
     parser.add_argument("-E", "--embedding-size",

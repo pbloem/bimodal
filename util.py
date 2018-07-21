@@ -17,6 +17,9 @@ import matplotlib.pyplot as plt
 from matplotlib import cm
 import matplotlib.gridspec as gridspec
 
+PAD, SOS, EOS, UNK = 0, 1, 2, 3
+EXTRA_SYMBOLS = ['.pad', '.sos', '.eos', '.unk']
+
 def clean(axes=None):
 
     if axes is None:
@@ -201,6 +204,41 @@ def interpolate(images, encoder, decoder, steps=7, name='interpolate', mode='sph
 
     plt.savefig(name + '.pdf')
 
+def interpolate(zpairs, decoder, steps=9, name='interpolate', mode='spherical', reps=5):
+    """
+    Plots a grid of values interpolating (linearly)  between four given items.
+
+    :param name:
+    :return:
+    """
+
+    plt.figure(figsize=(steps, len(zpairs)))
+
+    f, aa = plt.subplots(len(zpairs), steps, gridspec_kw = {'wspace':0, 'hspace':0.01})
+
+    for r, zpair in enumerate(zpairs):
+
+        z1, z2 = zpair
+
+        if mode == 'spherical':
+            zs = slerp(z1, z2, steps)
+        elif mode == 'linear':
+            zs = linp(z1, z2, steps)
+        else:
+            raise Exception('Mode {} not recognized'.format(mode))
+
+        out = decoder(zs).data
+        out = np.transpose(out.cpu().numpy(), (0, 2, 3, 1))
+
+        for i in range(steps):
+            aa[r, i].imshow(out[i])
+
+    for i in range(aa.shape[0]):
+        for j in range(aa.shape[1]):
+            clean(aa[i,j])
+
+    plt.savefig(name + '.pdf')
+
 def linp(x, y, steps=5):
     """
     Produces a spherical linear interpolation between two points
@@ -222,14 +260,15 @@ def slerp(x, y, steps=5):
     """
     Produces a spherical linear interpolation between two points
 
-    :param x:
+    :param x: 1 by n matrix or length-n vector
     :param y:
     :param steps:
     :return:
     """
     assert x.size(0) == y.size(0)
 
-    x, y = x[0], y[0]
+    if len(x.size()) > 1:
+        x, y = x[0], y[0]
 
     n = x.size(0)
 
@@ -259,3 +298,10 @@ def pad(sequences):
             result[i, j] = val
 
     return result, lengths
+
+def to_var(x, volatile=False):
+    if torch.cuda.is_available():
+        x = x.cuda()
+    return Variable(x, volatile=volatile)
+
+

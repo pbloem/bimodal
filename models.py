@@ -13,9 +13,11 @@ import torch.nn.utils.rnn as rnn_utils
 from torch.autograd import Variable
 
 import util
+from util import to_var
+from util import PAD, SOS, EOS, UNK, EXTRA_SYMBOLS
 
 """
-Code for the Sequence VAE inspired by https://github.com/timbmg/Sentence-VAE
+Code for the Sequence VAE borrowed from https://github.com/timbmg/Sentence-VAE
 
 """
 
@@ -130,6 +132,7 @@ class SeqDecoder(Module):
 
     def __init__(self, vocab_size, zsize=32, dropout=0.5, hidden_size=256, embedding_size=300, embedding=None):
         super().__init__()
+        self.tensor = torch.cuda.FloatTensor if torch.cuda.is_available() else torch.Tensor
 
         self.zsize = zsize
         self.vocab_size = vocab_size
@@ -147,6 +150,7 @@ class SeqDecoder(Module):
         self.tohidden = Linear(zsize, hidden_size * 2)
 
     def forward(self, zsample, sequence, lengths):
+
         """
         Outputs log-softmax
 
@@ -186,3 +190,81 @@ class SeqDecoder(Module):
         logp = log_softmax(voc, dim=-1)
 
         return logp
+
+    def sample(self, n=4, z=None, max_length=60):
+
+        if z is None:
+            batch_size = n
+            z = to_var(torch.randn([batch_size, self.latent_size]))
+        else:
+            batch_size = z.size(0)
+
+        hidden = self.tohidden(z)
+
+        hidden = hidden.view(2, batch_size, self.hidden_size)
+
+        # required for dynamic stopping of sentence generation
+        sequence_idx     = torch.arange(0, batch_size, out=self.tensor()).long() # all idx of batch
+        sequence_running = torch.arange(0, batch_size, out=self.tensor()).long() # all idx of batch which are still generating
+        sequence_mask    = torch.ones(batch_size, out=self.tensor()).byte()
+
+        running_seqs = torch.arange(0, batch_size, out=self.tensor()).long() # idx of still generating sequences with respect to current loop
+
+        generations = self.tensor(batch_size, max_length).fill_(PAD).long()
+
+        t=0
+        while t < max_length and len(running_seqs) > 0:
+
+            if t == 0:
+                input_sequence = to_var(torch.Tensor(batch_size).fill_(SOS).long())
+
+            input_sequence = input_sequence.unsqueeze(1)
+
+            input_embedding = self.embedding(input_sequence)
+
+            output, hidden = self.decoder_rnn(input_embedding, hidden)
+
+            logits = self.outputs2vocab(output)
+
+            input_sequence = self._sample(logits)
+
+            # save next input
+            generations = self._save_sample(generations, input_sequence, sequence_running, t)
+
+            # update global running sequence
+            sequence_mask[sequence_running] = (input_sequence != EOS).data
+            sequence_running = sequence_idx.masked_select(sequence_mask)
+
+            # update local running sequences
+            running_mask = (input_sequence != EOS).data
+            running_seqs = running_seqs.masked_select(running_mask)
+
+            # prune input and hidden state according to local update
+            if len(running_seqs.size()) > 0:
+
+                input_sequence = input_sequence[running_seqs]
+                hidden = hidden[:, running_seqs]
+
+                running_seqs = torch.arange(0, len(running_seqs), out=self.tensor()).long()
+
+            t += 1
+
+        return generations, z
+
+    def _sample(self, dist, mode='greedy'):
+
+        if mode == 'greedy':
+            _, sample = torch.topk(dist, 1, dim=-1)
+        sample = sample.squeeze()
+
+        return sample
+
+    def _save_sample(self, save_to, sample, running_seqs, t):
+        # select only still running
+        running_latest = save_to[running_seqs]
+        # update token at position t
+        running_latest[:,t] = sample.data
+        # save back
+        save_to[running_seqs] = running_latest
+
+        return save_to
