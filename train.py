@@ -105,8 +105,6 @@ def go(arg):
     for e in range(arg.epochs):
         print('epoch', e)
         for fr in tqdm.trange(0, len(coco_data), arg.batch_size):
-            if fr > 60:
-                break
 
             to = min(len(coco_data), fr + arg.batch_size)
 
