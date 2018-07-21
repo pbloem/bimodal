@@ -184,6 +184,9 @@ def go(arg):
             print('Interpolation, repeat', r)
 
             z1, z2 = torch.randn(2, arg.latent_size)
+            if torch.cuda.is_available():
+                z1, z2 = z1.cuda(), z2.cuda()
+
             zpairs.append((z1, z2))
 
             zs = util.slerp(z1, z2, 10)
