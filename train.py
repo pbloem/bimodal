@@ -74,8 +74,8 @@ def go(arg):
 
         sentence = ''
         for id in indices:
-                if id == PAD:
-                    break
+                # if id == PAD:
+                #     break
                 sentence += i2w[id] + '_'
 
         return sentence
