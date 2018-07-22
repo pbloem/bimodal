@@ -100,7 +100,7 @@ def go(arg):
     params = []
     for model in mods:
         params.extend(model.parameters())
-    optimizer = Adam(params, lr=options.lr)
+    optimizer = Adam(params, lr=arg.lr)
 
     instances_seen = 0
 
