@@ -28,16 +28,17 @@ class ImEncoder(Module):
         self.zsize = zsize
 
         # - channel sizes
-        a, b, c = 8, 32, 128
+        a, b, c = 8, 32, 128 # channel sizes
+        p, q, r = 2, 2, 2 # up/downsampling
 
         # - Encoder
         modules = [
             util.Block(3, a, use_res=use_res, batch_norm=use_bn),
-            MaxPool2d((4, 4)),
+            MaxPool2d((p, p)),
             util.Block(a, b, use_res=use_res, batch_norm=use_bn),
-            MaxPool2d((4, 4)),
+            MaxPool2d((q, q)),
             util.Block(b, c, use_res=use_res, batch_norm=use_bn),
-            MaxPool2d((4, 4)),
+            MaxPool2d((r, r)),
         ]
 
         for i in range(depth):
@@ -45,7 +46,7 @@ class ImEncoder(Module):
 
         modules.extend([
             util.Flatten(),
-            Linear((in_size[0] // 64) * (in_size[1] // 64) * c, zsize * 2)
+            Linear((in_size[0] // (p*q*r)) * (in_size[1] //  (p*q*r)) * c, zsize * 2)
         ])
 
         self.encoder = Sequential(*modules)
@@ -64,12 +65,14 @@ class ImDecoder(Module):
 
         # - channel sizes
         a, b, c = 8, 32, 128
+        p, q, r = 2, 2, 2 # up/downsampling
+
 
         #- Decoder
         upmode = 'bilinear'
         modules = [
-            Linear(zsize, (in_size[0] // 64) * (in_size[1] // 64) * c), ReLU(),
-            util.Reshape((c, in_size[0] // 64, in_size[1] // 64))
+            Linear(zsize, (in_size[0] // (p*q*r)) * (in_size[1] // (p*q*r)) * c), ReLU(),
+            util.Reshape((c, in_size[0] // (p*q*r), in_size[1] // (p*q*r)))
         ]
 
         for _ in range(depth):
@@ -77,11 +80,11 @@ class ImDecoder(Module):
 
 
         modules.extend([
-            Upsample(scale_factor=4, mode=upmode),
+            Upsample(scale_factor=r, mode=upmode),
             util.Block(c, c, deconv=True, use_res=use_res, batch_norm=use_bn),
-            Upsample(scale_factor=4, mode=upmode),
+            Upsample(scale_factor=q, mode=upmode),
             util.Block(c, b, deconv=True, use_res=use_res, batch_norm=use_bn),
-            Upsample(scale_factor=4, mode=upmode),
+            Upsample(scale_factor=p, mode=upmode),
             util.Block(b, a, deconv=True, use_res=use_res, batch_norm=use_bn),
             ConvTranspose2d(a, 3, kernel_size=1, padding=0),
             Sigmoid()

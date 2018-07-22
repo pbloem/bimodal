@@ -105,7 +105,7 @@ def go(arg):
     for e in range(arg.epochs):
         print('epoch', e)
         for fr in tqdm.trange(0, len(coco_data), arg.batch_size):
-            if fr > 20:
+            if fr > 1:
                 break
 
             to = min(len(coco_data), fr + arg.batch_size)
@@ -155,15 +155,16 @@ def go(arg):
             kl_cap = util.kl_loss(*zcap)
 
             rec_img = img_dec(util.sample(*zimg))
-            rec_img = binary_cross_entropy(rec_img, imbatch, reduce=False).view(b, -1).sum(dim=1)
+            rl_img = binary_cross_entropy(rec_img, imbatch, reduce=False).view(b, -1).sum(dim=1)
 
             rec_cap = seq_dec(util.sample(*zcap), cap_teacher, lengths + 1)
             rec_cap = rec_cap.transpose(1, 2)
+            rl_cap = nll_loss(rec_cap, cap_out, reduce=False).view(b, -1)
 
-            rec_cap = nll_loss(rec_cap, cap_out, reduce=False).view(b, -1).sum(dim=1)
+            rl_cap = rl_cap.sum(dim=1)
 
-            loss_img = (rec_img + kl_img).mean()
-            loss_cap = (rec_cap + kl_cap).mean()
+            loss_img = (rl_img + kl_img).mean()
+            loss_cap = (rl_cap + kl_cap).mean()
 
             #- backward pass
             loss = loss_img + loss_cap
