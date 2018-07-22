@@ -105,7 +105,7 @@ def go(arg):
     for e in range(arg.epochs):
         print('epoch', e)
         for fr in tqdm.trange(0, len(coco_data), arg.batch_size):
-            if fr > 1:
+            if arg.instance_limit is not None and fr > arg.instance_limit:
                 break
 
             to = min(len(coco_data), fr + arg.batch_size)
@@ -166,9 +166,11 @@ def go(arg):
             loss_img = (rl_img + kl_img).mean()
             loss_cap = (rl_cap + kl_cap).mean()
 
-            #- backward pass
             loss = loss_img + loss_cap
 
+
+            #- backward pass
+            optimizer.zero_grad()
             loss.backward()
             optimizer.step()
 
@@ -228,6 +230,11 @@ if __name__ == "__main__":
                         dest="embedding_size",
                         help="Size of the embeddings.",
                         default=300, type=int)
+
+    parser.add_argument("--limit",
+                        dest="instance_limit",
+                        help="Limit on the number of instances seen per batch (for debugging).",
+                        default=None, type=int)
 
     parser.add_argument("-l", "--learn-rate",
                         dest="lr",
