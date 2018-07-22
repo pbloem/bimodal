@@ -71,6 +71,13 @@ def tokenize(sentence : str):
     return REGEX.sub('', sentence.lower()).split()
 
 def intseq(words, w2i, unk='.unk'):
+    """
+    Convert a word sequence to an integer sequence based on the given codebook.
+    :param words:
+    :param w2i:
+    :param unk:
+    :return:
+    """
     res = [None] * len(words)
     for j, word in enumerate(words):
             if word in w2i:

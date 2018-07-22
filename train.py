@@ -125,7 +125,7 @@ def go(arg):
 
             capbatch = [] # to integer sequence
             for caption in captions:
-                capbatch.append(util.intseq(caption, w2i))
+                capbatch.append(util.intseq(util.tokenize(caption), w2i))
 
             capbatch, lengths = util.pad(capbatch)
 
