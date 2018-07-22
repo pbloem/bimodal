@@ -20,16 +20,14 @@ from util import PAD, SOS, EOS, UNK, EXTRA_SYMBOLS
 Code for the Sequence VAE borrowed from https://github.com/timbmg/Sentence-VAE
 
 """
+a, b, c = 2, 4, 6  # channel sizes
+p, q, r = 4, 4, 4  # up/downsampling
 
 class ImEncoder(Module):
 
     def __init__(self, in_size, zsize=32, use_res=False, use_bn=False, depth=0):
         super().__init__()
         self.zsize = zsize
-
-        # - channel sizes
-        a, b, c = 8, 32, 128 # channel sizes
-        p, q, r = 2, 2, 2 # up/downsampling
 
         # - Encoder
         modules = [
@@ -62,11 +60,6 @@ class ImDecoder(Module):
         super().__init__()
 
         self.zsize = zsize
-
-        # - channel sizes
-        a, b, c = 8, 32, 128
-        p, q, r = 2, 2, 2 # up/downsampling
-
 
         #- Decoder
         upmode = 'bilinear'
@@ -194,7 +187,41 @@ class SeqDecoder(Module):
 
         return logp
 
-    def sample(self, n=4, z=None, max_length=60):
+    def sample(self, z=None, n=4, max_length=60, temperature=1.0):
+        """
+
+        :param z:
+        :param n: Ignored if z is given
+        :param max_length:
+        :param temperature:
+        :return:
+        """
+
+        if z is None:
+            z = to_var(torch.randn([n, self.latent_size]))
+
+        b, l = z.size()
+
+        hidden = self.tohidden(z)
+
+        hidden = hidden.view(2, b, self.hidden_size)
+
+        input = self.tensor(b, max_length).fill_(PAD).long()
+        input[:, 0] = SOS
+
+        for t in range(max_length - 1):
+
+            input_embedding = self.embedding(input)
+
+            output, hidden = self.decoder_rnn(input_embedding, hidden)
+            logits = self.outputs2vocab(output)
+
+            current = logits[:, t+1, :] # logits for the current step
+            input[:, t+1] = util.sample_logits(current, temperature)
+
+        return input
+
+    def sample_old(self, n=4, z=None, max_length=60):
 
         if z is None:
             batch_size = n
@@ -254,7 +281,8 @@ class SeqDecoder(Module):
 
         return generations, z
 
-    def _sample(self, dist, mode='greedy'):
+
+    def _sample_old(self, dist, mode='greedy'):
 
         if mode == 'greedy':
             _, sample = torch.topk(dist, 1, dim=-1)

@@ -23,6 +23,7 @@ from util import PAD, SOS, EOS, UNK, EXTRA_SYMBOLS
 from tensorboardX import SummaryWriter
 
 REP = 3
+TEMPS = [0.0, 0.1, 1.0]
 
 def go(arg):
 
@@ -139,9 +140,11 @@ def go(arg):
 
             if torch.cuda.is_available():
                 imbatch = imbatch.cuda()
+
                 capbatch = capbatch.cuda()
                 cap_teacher = cap_teacher.cuda()
                 cap_out = cap_out.cuda()
+
                 lengths = lengths.cuda()
 
             imbatch = Variable(imbatch)
@@ -197,8 +200,8 @@ def go(arg):
 
             zs = util.slerp(z1, z2, 10)
 
-            print('== sentences ==')
-            sentences, _ = seq_dec.sample(z=zs)
+            print('== sentences (temp={}) =='.format(TEMPS[r]))
+            sentences = seq_dec.sample(z=zs, temperature=TEMPS[r])
 
             for s in sentences:
                 print('   ', decode(s))

@@ -286,6 +286,7 @@ def slerp(x, y, steps=5):
     return   x.unsqueeze(0).expand(steps, n) * d1 \
            + y.unsqueeze(0).expand(steps, n) * d2
 
+
 def pad(sequences):
 
     bsize = len(sequences)
@@ -304,4 +305,35 @@ def to_var(x, volatile=False):
         x = x.cuda()
     return Variable(x, volatile=volatile)
 
+def sample_logits(logits, temperature=1.0):
 
+    """
+    Sample an index from a (batched) logit vector.
+
+    :param preds:
+    :param temperature:
+    :return:
+    """
+    b, v = logits.size()
+
+    if temperature == 0.0:
+        return torch.argmax(logits, dim= 1)
+
+    preds = logits / temperature
+    preds = preds - logsumexp(preds, dim=1, keepdim=True)
+
+    choice = torch.multinomial(torch.exp(preds), num_samples=1)
+
+    return choice.view(-1)
+
+def logsumexp(x, dim=None, keepdim=False):
+    # https://github.com/pytorch/pytorch/issues/2591
+
+    if dim is None:
+        x, dim = x.view(-1), 0
+    xm, _ = torch.max(x, dim, keepdim=True)
+    x = torch.where(
+        (xm == float('inf')) | (xm == float('-inf')),
+        xm,
+        xm + torch.log(torch.sum(torch.exp(x - xm), dim, keepdim=True)))
+    return x if keepdim else x.squeeze(dim)
