@@ -89,15 +89,17 @@ def go(arg):
     seq_enc = models.SeqEncoder(vocab_size=vocab_size, embedding=embedding, zsize=arg.latent_size)
     seq_dec = models.SeqDecoder(vocab_size=vocab_size, embedding=embedding, zsize=arg.latent_size)
 
+    mods = [img_enc, img_dec, seq_enc, seq_dec]
+
     if torch.cuda.is_available():
-        img_enc.cuda()
-        img_dec.cuda()
-        seq_enc.cuda()
-        seq_dec.cuda()
+        for model in mods:
+            model.cuda()
 
     #- The standard dataloader approach doesn't seem to work with the captions, so we'll do our own batching.
     #  It's a little slower, probably, but it won't be the bottleneck
-    params = list(img_enc.parameters()) + list(img_dec.parameters())
+    params = []
+    for model in mods:
+        params.extend(model.parameters())
     optimizer = Adam(params, lr=options.lr)
 
     instances_seen = 0
@@ -167,7 +169,6 @@ def go(arg):
             loss_cap = (rl_cap + kl_cap).mean()
 
             loss = loss_img + loss_cap
-
 
             #- backward pass
             optimizer.zero_grad()
