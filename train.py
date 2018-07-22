@@ -178,9 +178,9 @@ def go(arg):
             instances_seen += b
 
             tbw.add_scalar('score/img/kl', float(kl_img.mean()), instances_seen)
-            tbw.add_scalar('score/img/rec', float(rec_img.mean()), instances_seen)
+            tbw.add_scalar('score/img/rec', float(rl_img.mean()), instances_seen)
             tbw.add_scalar('score/cap/kl', float(kl_cap.mean()), instances_seen)
-            tbw.add_scalar('score/cap/rec', float(rec_cap.mean()), instances_seen)
+            tbw.add_scalar('score/cap/rec', float(rl_cap.mean()), instances_seen)
             tbw.add_scalar('score/loss', float(loss), instances_seen)
 
         # Interpolate
