@@ -75,6 +75,10 @@ def go(arg):
 
         return sentence
 
+    s = random.choice(data)
+    print('random sentence', s)
+    print('               ', decode(s))
+
     ## Set up the model
 
     embedding = torch.nn.Embedding(num_embeddings=vocab_size, embedding_dim=arg.embedding_size)
@@ -160,8 +164,6 @@ def go(arg):
             z1, z2 = torch.randn(2, arg.latent_size)
             if torch.cuda.is_available():
                 z1, z2 = z1.cuda(), z2.cuda()
-
-            zpairs.append((z1, z2))
 
             zs = util.slerp(z1, z2, 10)
 

@@ -190,7 +190,7 @@ class SeqDecoder(Module):
     def sample(self, z=None, n=4, max_length=60, temperature=1.0):
         """
 
-        :param z:
+        :param z: Batch of latent vectors
         :param n: Ignored if z is given
         :param max_length:
         :param temperature:
@@ -203,7 +203,6 @@ class SeqDecoder(Module):
         b, l = z.size()
 
         hidden = self.tohidden(z)
-
         hidden = hidden.view(2, b, self.hidden_size)
 
         input = self.tensor(b, max_length).fill_(PAD).long()
@@ -213,11 +212,13 @@ class SeqDecoder(Module):
 
             input_embedding = self.embedding(input)
 
-            output, hidden = self.decoder_rnn(input_embedding, hidden)
+            output, _ = self.decoder_rnn(input_embedding, hidden)
             logits = self.outputs2vocab(output)
 
             current = logits[:, t+1, :] # logits for the current step
             input[:, t+1] = util.sample_logits(current, temperature)
+
+            print(input)
 
         return input
 
