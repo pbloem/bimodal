@@ -217,7 +217,7 @@ class SeqDecoder(Module):
 
             output, _ = self.decoder_rnn(input_embedding, hidden)
 
-            outputs = rnn_utils.pad_packed_sequence(outputs, batch_first=True)[0]
+            output = rnn_utils.pad_packed_sequence(output, batch_first=True)[0]
 
             logits = self.outputs2vocab(output)
 
