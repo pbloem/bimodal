@@ -87,9 +87,6 @@ def intseq(words, w2i, unk='.unk'):
 
     return res
 
-
-
-
 class Lambda(nn.Module):
     def __init__(self, lambd):
         super(Lambda, self).__init__()
