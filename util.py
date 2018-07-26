@@ -20,6 +20,26 @@ import matplotlib.gridspec as gridspec
 PAD, SOS, EOS, UNK = 0, 1, 2, 3
 EXTRA_SYMBOLS = ['.pad', '.sos', '.eos', '.unk']
 
+
+def log_anneal(step, total, temp=1):
+    """ Logistic annealing function
+    :param step:
+    :param total:
+    :param temp: Steepness of the curves
+    :return:
+    """
+    return float(1 / (1 + np.exp(-temp * (step*2 - total))))
+
+def lin_anneal(step, total, ceiling=0.5):
+    """ Linear annealing function
+    :param step:
+    :param total:
+    :param ceiling: Where in the process the aneal should hit 1. If 0.5, the anneal linearly climbs upt to 1 and then
+        hits 1 halfway
+    :return:
+    """
+    return min(1, (step/ceiling) / total)
+
 def clean(axes=None):
 
     if axes is None:

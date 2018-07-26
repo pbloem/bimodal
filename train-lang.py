@@ -100,7 +100,16 @@ def go(arg):
     instances_seen = 0
 
     for e in range(arg.epochs):
-        print('epoch', e)
+        if arg.annealing_mode == None or arg.annealing_mode == 'none':
+            weight = 1
+        elif arg.annealing_mode == 'linear':
+            weight = util.lin_anneal(e, arg.epochs)
+        elif arg.annealing_mode == 'logistic':
+            weight = util.log_anneal(e, arg.epochs)
+        else:
+            raise Exception('Annea;ing mode {} not recognized'.format(arg.annealing_mode))
+
+        print('Epoch {}, setting KL weight to {}'.format(e, weight))
         for fr in tqdm.trange(0, len(data), arg.batch_size):
             if arg.instance_limit is not None and fr > arg.instance_limit:
                 break
@@ -142,7 +151,7 @@ def go(arg):
 
             rl = rl.sum(dim=1)
 
-            loss = (rl + kl).mean()
+            loss = (rl + weight * kl).mean()
 
             #- backward pass
             optimizer.zero_grad()
@@ -176,6 +185,11 @@ if __name__ == "__main__":
 
     ## Parse the command line options
     parser = ArgumentParser()
+
+    parser.add_argument("-a", "--annealing-mode",
+                        dest="annealing_mode",
+                        help="Annealing mode: none, logistic, linear.",
+                        default=None, type=str)
 
     parser.add_argument("-e", "--epochs",
                         dest="epochs",
