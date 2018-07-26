@@ -212,7 +212,13 @@ class SeqDecoder(Module):
 
             input_embedding = self.embedding(input)
 
+            input_embedding = rnn_utils.pack_padded_sequence(input_embedding, [max_length] * b,
+                                                          batch_first=True)
+
             output, _ = self.decoder_rnn(input_embedding, hidden)
+
+            outputs = rnn_utils.pad_packed_sequence(outputs, batch_first=True)[0]
+
             logits = self.outputs2vocab(output)
 
             current = logits[:, t, :] # logits for the current step
