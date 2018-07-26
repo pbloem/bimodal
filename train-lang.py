@@ -156,7 +156,6 @@ def go(arg):
             tbw.add_scalar('lang', float(loss), instances_seen)
 
         # Interpolate
-        zpairs = []
         for r in range(REP):
 
             print('Interpolation, repeat', r)

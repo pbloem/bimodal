@@ -218,8 +218,6 @@ class SeqDecoder(Module):
             current = logits[:, t+1, :] # logits for the current step
             input[:, t+1] = util.sample_logits(current, temperature)
 
-            print(input)
-
         return input
 
     def sample_old(self, n=4, z=None, max_length=60):
