@@ -45,6 +45,7 @@ def go(arg):
     w2i = {word:ix for ix, word in enumerate(i2w)}
 
     data = []
+    suff = [EOS] if arg.add_eos else []
 
     for line in lines:
         words = util.tokenize(line)
@@ -56,7 +57,7 @@ def go(arg):
                 indices.add(UNK)
 
         if len(indices) > 0:
-            data.append(indices)
+            data.append(indices + suff)
 
     data.sort(key= lambda x : len(x))
 
@@ -190,6 +191,11 @@ if __name__ == "__main__":
                         dest="annealing_mode",
                         help="Annealing mode: none, logistic, linear.",
                         default=None, type=str)
+
+    parser.add_argument("-A","--add-eos",
+                        dest="add_eos",
+                        help="Add eos token to end of sentence",
+                        action="store_true")
 
     parser.add_argument("-e", "--epochs",
                         dest="epochs",
