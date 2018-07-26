@@ -117,7 +117,7 @@ def go(arg):
 
             if torch.cuda.is_available():
 
-                capbatch = batch.cuda()
+                batch = batch.cuda()
                 batch_teacher = batch_teacher.cuda()
                 batch_out = batch_out.cuda()
 
