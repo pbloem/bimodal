@@ -215,7 +215,7 @@ class SeqDecoder(Module):
             output, _ = self.decoder_rnn(input_embedding, hidden)
             logits = self.outputs2vocab(output)
 
-            current = logits[:, t+1, :] # logits for the current step
+            current = logits[:, t, :] # logits for the current step
             input[:, t+1] = util.sample_logits(current, temperature)
 
         return input
