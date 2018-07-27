@@ -19,11 +19,20 @@ from collections import defaultdict, Counter, OrderedDict
 import util, models
 
 from util import PAD, SOS, EOS, UNK, EXTRA_SYMBOLS
+from enum import Enum
 
 from tensorboardX import SummaryWriter
 
 REP = 3
 TEMPS = [0.0, 0.1, 1.0]
+
+class Mode(Enum):
+    independent = 'independent'
+    coupled = 'coupled'
+    style = 'style'
+
+    def __str__(self):
+        return self.value
 
 def go(arg):
 
@@ -81,16 +90,26 @@ def go(arg):
         return sentence
 
     ## Set up the models
-
-    img_enc = models.ImEncoder(in_size=(arg.img_size, arg.img_size), zsize=arg.latent_size)
-    img_dec = models.ImDecoder(in_size=(arg.img_size, arg.img_size), zsize=arg.latent_size)
-
     embedding = torch.nn.Embedding(num_embeddings=vocab_size, embedding_dim=arg.embedding_size)
 
-    seq_enc = models.SeqEncoder(vocab_size=vocab_size, embedding=embedding, zsize=arg.latent_size)
-    seq_dec = models.SeqDecoder(vocab_size=vocab_size, embedding=embedding, zsize=arg.latent_size)
+    if arg.mode != Mode.style:
+        img_enc = models.ImEncoder(in_size=(arg.img_size, arg.img_size), zsize=arg.latent_size)
+        img_dec = models.ImDecoder(in_size=(arg.img_size, arg.img_size), zsize=arg.latent_size)
 
-    mods = [img_enc, img_dec, seq_enc, seq_dec]
+        seq_enc = models.SeqEncoder(vocab_size=vocab_size, embedding=embedding, zsize=arg.latent_size)
+        seq_dec = models.SeqDecoder(vocab_size=vocab_size, embedding=embedding, zsize=arg.latent_size)
+
+        mods = [img_enc, img_dec, seq_enc, seq_dec]
+    else:
+        img_enc = models.ImEncoder(in_size=(arg.img_size, arg.img_size), zsize=arg.latent_size)
+        img_sty = models.ImEncoder(in_size=(arg.img_size, arg.img_size), zsize=arg.latent_size)
+        img_dec = models.ImDecoder(in_size=(arg.img_size, arg.img_size), zsize=arg.latent_size * 2)
+
+        seq_enc = models.SeqEncoder(vocab_size=vocab_size, embedding=embedding, zsize=arg.latent_size)
+        seq_sty = models.SeqEncoder(vocab_size=vocab_size, embedding=embedding, zsize=arg.latent_size)
+        seq_dec = models.SeqDecoder(vocab_size=vocab_size, embedding=embedding, zsize=arg.latent_size * 2)
+
+        mods = [img_enc, img_dec, img_sty, seq_enc, seq_dec, seq_sty]
 
     if torch.cuda.is_available():
         for model in mods:
@@ -159,19 +178,47 @@ def go(arg):
             kl_img = util.kl_loss(*zimg)
             kl_cap = util.kl_loss(*zcap)
 
-            rec_img = img_dec(util.sample(*zimg))
-            rl_img = binary_cross_entropy(rec_img, imbatch, reduce=False).view(b, -1).sum(dim=1)
+            zimg_sample = util.sample(*zimg)
+            zcap_sample = util.sample(*zcap)
 
-            rec_cap = seq_dec(util.sample(*zcap), cap_teacher, lengths + 1)
-            rec_cap = rec_cap.transpose(1, 2)
-            rl_cap = nll_loss(rec_cap, cap_out, reduce=False).view(b, -1)
+            if arg.mode == Mode.style:
+                zimg_sty = img_sty(imbatch)
+                zcap_sty = seq_sty(capbatch, lengths)
 
-            rl_cap = rl_cap.sum(dim=1)
+                kl_img_sty = util.kl_loss(*zimg_sty)
+                kl_cap_sty = util.kl_loss(*zcap_sty)
 
-            loss_img = (rl_img + kl_img).mean()
-            loss_cap = (rl_cap + kl_cap).mean()
+                zimg_sample_sty = util.sample(*zimg_sty)
+                zcap_sample_sty = util.sample(*zcap_sty)
 
-            loss = loss_img + loss_cap
+                zimg_sample = torch.cat([zimg_sample, zimg_sample_sty], dim=1)
+                zcap_sample = torch.cat([zcap_sample, zcap_sample_sty], dim=1)
+
+            rec_imgimg = img_dec(zimg_sample)
+            rl_imgimg = binary_cross_entropy(rec_imgimg, imbatch, reduce=False).view(b, -1).sum(dim=1)
+
+            rec_capcap = seq_dec(zcap_sample, cap_teacher, lengths + 1).transpose(1, 2)
+            rl_capcap = nll_loss(rec_capcap, cap_out, reduce=False).view(b, -1).sum(dim=1)
+
+            if arg.mode != Mode.independent:
+                rec_capimg = img_dec(zcap_sample)
+                rl_capimg = binary_cross_entropy(rec_capimg, imbatch, reduce=False).view(b, -1).sum(dim=1)
+
+                rec_imgcap = seq_dec(zimg_sample, cap_teacher, lengths + 1).transpose(1, 2)
+                rl_imgcap = nll_loss(rec_imgcap, cap_out, reduce=False).view(b, -1).sum(dim=1)
+
+            loss_img = rl_imgimg + kl_img
+            loss_cap = rl_capcap + kl_cap
+
+            if arg.mode == Mode.coupled:
+                loss_img = loss_img + rl_capimg + kl_img
+                loss_cap = loss_cap + rl_imgcap + kl_cap
+
+            if arg.mode == Mode.style:
+                loss_img = loss_img + kl_img_sty
+                loss_cap = loss_cap + kl_cap_sty
+
+            loss = loss_img.mean() + loss_cap.mean()
 
             #- backward pass
             optimizer.zero_grad()
@@ -181,10 +228,14 @@ def go(arg):
             instances_seen += b
 
             tbw.add_scalar('score/img/kl', float(kl_img.mean()), instances_seen)
-            tbw.add_scalar('score/img/rec', float(rl_img.mean()), instances_seen)
+            tbw.add_scalar('score/imgimg/rec', float(rl_imgimg.mean()), instances_seen)
             tbw.add_scalar('score/cap/kl', float(kl_cap.mean()), instances_seen)
-            tbw.add_scalar('score/cap/rec', float(rl_cap.mean()), instances_seen)
+            tbw.add_scalar('score/capcap/rec', float(rl_capcap.mean()), instances_seen)
             tbw.add_scalar('score/loss', float(loss), instances_seen)
+
+            if arg.mode != Mode.independent:
+                tbw.add_scalar('score/capimg/rec', float(rl_capimg.mean()), instances_seen)
+                tbw.add_scalar('score/imgcap/rec', float(rl_imgcap.mean()), instances_seen)
 
         # Interpolate
         zpairs = []
@@ -192,7 +243,8 @@ def go(arg):
 
             print('Interpolation, repeat', r)
 
-            z1, z2 = torch.randn(2, arg.latent_size)
+            l = arg.latent_size if arg.mode != Mode.style else arg.latent_size * 2
+            z1, z2 = torch.randn(2, l)
             if torch.cuda.is_available():
                 z1, z2 = z1.cuda(), z2.cuda()
 
@@ -214,6 +266,11 @@ if __name__ == "__main__":
 
     ## Parse the command line options
     parser = ArgumentParser()
+
+    parser.add_argument("-m", "--mode",
+                        dest="mode",
+                        help="Mode. independent: trains fully separate autoencoders for images and language. shared: couples the latent space of the two autoencoders. style: uses separate encoders to capture style.",
+                        default=Mode.independent, type=Mode, choices=list(Mode))
 
     parser.add_argument("-e", "--epochs",
                         dest="epochs",
@@ -243,7 +300,7 @@ if __name__ == "__main__":
     parser.add_argument("-l", "--learn-rate",
                         dest="lr",
                         help="Learning rate.",
-                        default=0.0001, type=float)
+                        default=0.001, type=float)
 
     parser.add_argument("-I", "--image-size",
                         dest="img_size",
