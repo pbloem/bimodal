@@ -139,11 +139,11 @@ class SeqDecoder(Module):
 
         self.embedding = Embedding(vocab_size, embedding_size) if embedding is None else embedding
 
-        self.decoder_rnn = GRU(embedding_size, hidden_size, num_layers=1, bidirectional=True, batch_first=True)
+        self.decoder_rnn = GRU(embedding_size, hidden_size, num_layers=1, bidirectional=False, batch_first=True)
 
-        self.outputs2vocab = Linear(hidden_size * 2, vocab_size)
+        self.outputs2vocab = Linear(hidden_size, vocab_size)
 
-        self.tohidden = Linear(zsize, hidden_size * 2)
+        self.tohidden = Linear(zsize, hidden_size)
 
     def forward(self, zsample, sequence, lengths):
 
@@ -163,8 +163,6 @@ class SeqDecoder(Module):
 
         hidden = self.tohidden(zsample)
 
-        hidden = hidden.view(2, b, self.hidden_size)
-
         # decoder input
         input_embedding = self.embedding(input_sequence)
         input_embedding = self.word_dropout(input_embedding)
@@ -172,7 +170,7 @@ class SeqDecoder(Module):
         packed_input = rnn_utils.pack_padded_sequence(input_embedding, sorted_lengths.data.tolist(), batch_first=True)
 
         # decoder forward pass
-        outputs, _ = self.decoder_rnn(packed_input, hidden)
+        outputs, _ = self.decoder_rnn(packed_input, hidden.unsqueeze(0))
 
         # process outputs
         padded_outputs = rnn_utils.pad_packed_sequence(outputs, batch_first=True)[0].contiguous()
@@ -204,8 +202,6 @@ class SeqDecoder(Module):
 
         hidden = self.tohidden(z)
 
-        hidden = hidden.view(2, b, self.hidden_size)
-
         input = self.tensor(b, max_length).fill_(PAD).long()
         input[:, 0] = SOS
 
@@ -213,7 +209,12 @@ class SeqDecoder(Module):
 
             input_embedding = self.embedding(input)
 
-            output, _ = self.decoder_rnn(input_embedding, hidden)
+            # input_embedding = rnn_utils.pack_padded_sequence(input_embedding, [t+1] * b,
+            #                                             batch_first=True)
+
+            output, _ = self.decoder_rnn(input_embedding, hidden.unsqueeze(0))
+
+            # output = rnn_utils.pad_packed_sequence(output, batch_first=True)[0]
 
             logits = self.outputs2vocab(output)
 
