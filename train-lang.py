@@ -176,9 +176,13 @@ def go(arg):
 
             zs = util.slerp(z1, z2, 10)
 
-            print('== sentences (temp={}) =='.format(TEMPS[r]))
-            # sentences = seq_dec.sample(z=zs, temperature=TEMPS[r])
-            sentences = seq_dec.sample_old(z=zs)
+            if arg.original_sampling:
+                print('== sentences==')
+                sentences = seq_dec.sample_old(z=zs)
+            else:
+                print('== sentences (temp={}) =='.format(TEMPS[r]))
+                sentences = seq_dec.sample(z=zs, temperature=TEMPS[r])
+
 
             for s in sentences:
                 print('   ', decode(s))
@@ -196,6 +200,11 @@ if __name__ == "__main__":
     parser.add_argument("-A","--add-eos",
                         dest="add_eos",
                         help="Add eos token to end of sentence",
+                        action="store_true")
+
+    parser.add_argument("-O","--original-sampling",
+                        dest="original_sampling",
+                        help="Use the original sampling code, which is a little more convoluted, but might be faster.",
                         action="store_true")
 
     parser.add_argument("-e", "--epochs",
