@@ -203,6 +203,7 @@ class SeqDecoder(Module):
         b, l = z.size()
 
         hidden = self.tohidden(z)
+
         hidden = hidden.view(2, b, self.hidden_size)
 
         input = self.tensor(b, max_length).fill_(PAD).long()
@@ -212,12 +213,7 @@ class SeqDecoder(Module):
 
             input_embedding = self.embedding(input)
 
-            input_embedding = rnn_utils.pack_padded_sequence(input_embedding, [max_length] * b,
-                                                          batch_first=True)
-
             output, _ = self.decoder_rnn(input_embedding, hidden)
-
-            output = rnn_utils.pad_packed_sequence(output, batch_first=True)[0]
 
             logits = self.outputs2vocab(output)
 
@@ -228,14 +224,13 @@ class SeqDecoder(Module):
 
     def sample_old(self, n=4, z=None, max_length=60):
 
+
         if z is None:
-            batch_size = n
-            z = to_var(torch.randn([batch_size, self.latent_size]))
-        else:
-            batch_size = z.size(0)
+            z = to_var(torch.randn([n, self.latent_size]))
+
+        batch_size, l = z.size()
 
         hidden = self.tohidden(z)
-
         hidden = hidden.view(2, batch_size, self.hidden_size)
 
         # required for dynamic stopping of sentence generation
@@ -261,7 +256,7 @@ class SeqDecoder(Module):
 
             logits = self.outputs2vocab(output)
 
-            input_sequence = self._sample(logits)
+            input_sequence = self._sample_old(logits)
 
             # save next input
             generations = self._save_sample(generations, input_sequence, sequence_running, t)
@@ -284,7 +279,7 @@ class SeqDecoder(Module):
 
             t += 1
 
-        return generations, z
+        return generations
 
 
     def _sample_old(self, dist, mode='greedy'):

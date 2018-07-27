@@ -177,7 +177,8 @@ def go(arg):
             zs = util.slerp(z1, z2, 10)
 
             print('== sentences (temp={}) =='.format(TEMPS[r]))
-            sentences = seq_dec.sample(z=zs, temperature=TEMPS[r])
+            # sentences = seq_dec.sample(z=zs, temperature=TEMPS[r])
+            sentences = seq_dec.sample_old(z=zs)
 
             for s in sentences:
                 print('   ', decode(s))
